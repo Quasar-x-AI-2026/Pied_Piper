@@ -1,0 +1,197 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@300..700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================
+   BASE THEME (PRESENTATION)
+========================= */
+@layer base {
+  :root {
+    /* Charcoal black (NOT pure black) */
+    --background: 220 15% 6%;
+    --foreground: 0 0% 96%;
+
+    /* Surfaces */
+    --card: 220 15% 12%;
+    --card-foreground: 0 0% 96%;
+    --popover: 220 15% 10%;
+    --popover-foreground: 0 0% 96%;
+
+    /* Amber primary (high visibility) */
+    --primary: 38 95% 55%;
+    --primary-foreground: 220 15% 6%;
+
+    /* Mint accent (calm, readable) */
+    --accent: 165 70% 42%;
+    --accent-foreground: 220 15% 6%;
+
+    /* Secondary */
+    --secondary: 220 15% 16%;
+    --secondary-foreground: 0 0% 96%;
+
+    /* Muted text */
+    --muted: 220 15% 14%;
+    --muted-foreground: 0 0% 70%;
+
+    /* Status */
+    --success: 142 70% 45%;
+    --warning: 38 92% 55%;
+    --destructive: 0 70% 50%;
+
+    /* Borders & focus */
+    --border: 220 15% 18%;
+    --input: 220 15% 18%;
+    --ring: 38 95% 55%;
+
+    --radius: 0.75rem;
+
+    /* Layout */
+    --nav-height: 4rem;
+    --container-max: 1280px;
+
+    /* Chat */
+    --chat-user: 38 95% 55%;
+    --chat-user-foreground: 220 15% 6%;
+    --chat-ai: 220 15% 14%;
+    --chat-ai-foreground: 0 0% 96%;
+
+    /* Confidence */
+    --confidence-high: 142 70% 45%;
+    --confidence-medium: 38 92% 55%;
+    --confidence-low: 0 70% 50%;
+
+    /* Sidebar */
+    --sidebar-background: 220 15% 7%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-accent: 220 15% 14%;
+    --sidebar-border: 220 15% 18%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: "Space Grotesk", sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+/* =========================
+   COMPONENTS
+========================= */
+@layer components {
+  .container-app {
+    @apply max-w-[var(--container-max)] mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .card-elevated {
+    @apply bg-card rounded-xl border border-border shadow-sm;
+  }
+
+  .card-interactive {
+    @apply card-elevated transition-all duration-200 hover:border-primary/40;
+  }
+
+  .nav-tab {
+    @apply relative px-4 py-2 text-sm font-medium text-muted-foreground transition-colors;
+    @apply hover:text-foreground;
+  }
+
+  .nav-tab-active {
+    @apply text-primary;
+  }
+
+  .nav-tab-active::after {
+    content: '';
+    @apply absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full;
+  }
+
+  /* Chat bubbles */
+  .chat-bubble-user {
+    @apply bg-[hsl(var(--chat-user))] text-[hsl(var(--chat-user-foreground))]
+           rounded-2xl rounded-br-md px-4 py-3;
+  }
+
+  .chat-bubble-ai {
+    @apply bg-[hsl(var(--chat-ai))] text-[hsl(var(--chat-ai-foreground))]
+           rounded-2xl rounded-bl-md px-4 py-3;
+  }
+
+  /* Inputs */
+  .input-clean {
+    @apply w-full px-4 py-3 bg-background border border-border rounded-lg;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary;
+    @apply transition-all duration-200;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5;
+    @apply bg-primary text-primary-foreground font-semibold rounded-lg;
+    @apply hover:bg-primary/90 transition-colors duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5;
+    @apply bg-secondary text-foreground font-medium rounded-lg;
+    @apply hover:bg-secondary/80 transition-colors duration-200;
+  }
+
+  /* Badges */
+  .confidence-badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .confidence-high {
+    @apply bg-[hsl(var(--confidence-high))]/15 text-[hsl(var(--confidence-high))];
+  }
+
+  .confidence-medium {
+    @apply bg-[hsl(var(--confidence-medium))]/15 text-[hsl(var(--confidence-medium))];
+  }
+
+  .confidence-low {
+    @apply bg-[hsl(var(--confidence-low))]/15 text-[hsl(var(--confidence-low))];
+  }
+}
+
+/* =========================
+   UTILITIES
+========================= */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
