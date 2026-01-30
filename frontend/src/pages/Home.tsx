@@ -40,7 +40,7 @@ const Home = (): JSX.Element => {
 
         <div className="mt-10 flex justify-center">
           <button
-            onClick={() => navigate("/app")}
+            onClick={() => navigate("/auth")}
             className="btn-primary px-10 py-4 text-lg"
           >
             Get Started
