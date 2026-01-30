@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+
 
 export default function Auth() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [showPassword, setShowPassword] = useState(false);
-  
+  const {login, signup, loading} = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -12,14 +16,25 @@ export default function Auth() {
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+          setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Form submitted:', formData);
-    alert(`${mode === 'signin' ? 'Sign In' : 'Sign Up'} clicked!`);
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+          e.preventDefault();
+          try {
+            if (mode === "signin") {
+              const response = await login(formData.email, formData.password);
+              navigate('/app');
+            } else {
+              await signup(formData.name, formData.email, formData.password);
+              alert("Account created! Please sign in.");
+              setMode("signin");
+            }
+          } catch (error: any) {
+            alert(error.message || "Authentication failed");
+          }
+};
+
 
   const switchMode = () => {
     setMode(mode === 'signin' ? 'signup' : 'signin');
@@ -35,7 +50,7 @@ export default function Auth() {
               <ShieldCheck className="w-9 h-9 text-primary-foreground" />
             </div>
             <h1 className="text-3xl font-bold text-foreground mb-2">
-              {mode === 'signin' ? 'Welcome Back' : 'Get Started'}
+              {mode === 'signup' ? 'Welcome Back' : 'Get Started'}
             </h1>
             <p className="text-muted-foreground">
               {mode === 'signin' ? 'Sign in to access your account' : 'Create your account to continue'}
