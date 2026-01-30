@@ -23,7 +23,7 @@ export default function Auth() {
           e.preventDefault();
           try {
             if (mode === "signin") {
-              const response = await login(formData.email, formData.password);
+              await login(formData.email, formData.password);
               navigate('/app');
             } else {
               await signup(formData.name, formData.email, formData.password);

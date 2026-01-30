@@ -58,3 +58,18 @@ class CrudService {
 }
 
 module.exports = CrudService;
+
+const axios = require('axios');
+
+async function callBotAPI(payload) {
+  try {
+    const response = await axios.post('BOT_API_URL', payload, {
+      timeout: 10000 // 10 seconds instead of 30
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error calling bot API:', error.message);
+    // Optionally, log error.response?.data for more details
+    throw new Error('Bot API unavailable');
+  }
+}

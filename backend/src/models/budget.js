@@ -1,65 +1,24 @@
 const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
-const budgetSchema = new mongoose.Schema({
-    userId : {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
-    },
-    totalIncome: {
-        type: Number,
-        required: true,
-    },
-    expenses: {
-        rent: {
-            type: Number,
-            default: 0
-        },
-        emi: {
-            type: Number,
-            default: 0
-        },
-        utilities: {
-            type: Number,
-            default: 0
-        },
-        groceries: {
-            type: Number,
-            default: 0
-        },
-        other: {
-            type: Number,
-            default: 0
-        }
-    },
-    savingGoals: {
-        percentage: {
-            type: Number,
-        },
-        monthly: {
-            type: Number,
-        },
-        emergencyFund: {
-            type: Number,
-        }
-    },
-    recommendations: [{
-        catogory: {
-            type: String,
-        },
-        message: {
-            type: String,
-        },
-        priority: {
-            type: String,
-            enum: ['Low', 'Medium', 'High'],
-        },
-        createdAt: {
-            type: Date,
-            default: Date.now,
-        }
-    }],
-
+const TransactionSchema = new Schema({
+    amount: { type: Number, required: true },
+    category: { type: String, default: null },
+    description: { type: String, default: null },
+    type: { type: String, default: 'expense' },
+    date: { type: Date, default: Date.now }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Budget', budgetSchema);
+const BudgetSchema = new Schema({
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    transactions: { type: [TransactionSchema], default: [] },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+});
+
+BudgetSchema.pre('save', function (next) {
+    this.updatedAt = Date.now();
+    next();
+});
+
+module.exports = mongoose.model('Budget', BudgetSchema);

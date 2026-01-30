@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const mongoosePaginate = require('mongoose-paginate-v2');
+
 
 const schemeSchema = new mongoose.Schema({
     name: { 
@@ -41,7 +41,6 @@ const schemeSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-// schemeSchema.plugin(mongoosePaginate);
 
 schemeSchema.index({ name: 'text', description: 'text', 'filterMeta.state': 1 });
 

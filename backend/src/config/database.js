@@ -9,7 +9,6 @@ const connect = async () => {
     console.log('Connected to MongoDB Atlas');
     console.log(`Database: ${mongoose.connection.name}`);
     
-    process.exit(0);
   } catch (error) {
     console.error('FAILED:', error.message);
     process.exit(1);

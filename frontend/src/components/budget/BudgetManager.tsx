@@ -1,158 +1,212 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Transaction } from "@/types";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { BudgetOverview } from "./BudgetOverview";
 import { TransactionForm } from "./TransactionForm";
 import { TransactionList } from "./TransactionList";
 import { BudgetAnalytics } from "./BudgetAnalytics";
-import { Plus, ChevronLeft, ChevronRight, Lightbulb } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Loader2, RefreshCw } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+
+const API_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 
 export function BudgetManager() {
-  const [transactions, setTransactions] =
-    useLocalStorage<Transaction[]>("finguard-transactions", []);
-
+  const { token } = useAuth();
+  console.log("BudgetManager token:", token);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
-  const monthLabel = (() => {
-    const [year, month] = selectedMonth.split("-");
-    return new Date(+year, +month - 1).toLocaleDateString("en-IN", {
-      month: "long",
-      year: "numeric",
-    });
-  })();
+  const [budgetError, setBudgetError] = useState<string | null>(null);
 
-  const getMonthKey = (date: Date) =>
-    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-  const handleAddTransaction = (
-    transaction: Omit<Transaction, "id" | "date">
-  ) => {
-    const [year, month] = selectedMonth.split("-").map(Number);
+  // --- 1. Load Data ---
+  useEffect(() => {
+    const fetchBudgetData = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${API_URL}/api/v1/budget`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-    const newTransaction: Transaction = {
-      ...transaction,
-      id: Date.now().toString(),
-      date: new Date(year, month - 1, new Date().getDate()),
+        if (!res.ok) {
+          if (res.status === 404) {
+            setBudgetError("Budget feature is not available (backend endpoint missing).");
+            setTransactions([]);
+            return;
+          }
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
+        let data;
+        try {
+          data = await res.json();
+          console.log("Fetched budget data:", data.data.transactions);
+        } catch (jsonErr) {
+          setBudgetError("Received invalid response from server.");
+          setTransactions([]);
+          return;
+        }
+
+        // Transform backend data to transactions
+        if (data && data.data.transactions) {
+          console.log("Transforming backend budget data to transactions:", data.data.transactions);
+          setTransactions(data.data.transactions);
+        }
+        setBudgetError(null);
+      } catch (err) {
+        console.error("Failed to fetch budget data:", err);
+        setBudgetError("Failed to fetch budget data.");
+        setTransactions([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setTransactions((prev) => [...prev, newTransaction]);
+    if (token) fetchBudgetData();
+  }, [token]);
+
+  // --- Listen for budget updates from chat ---
+  useEffect(() => {
+    const handleBudgetUpdate = () => {
+      console.log("Budget update event received, refreshing data...");
+      // Refetch budget data
+      const fetchBudgetData = async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/v1/budget`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.transactions) {
+              setTransactions(data.transactions);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to refresh budget data:", err);
+        }
+      };
+
+      if (token) fetchBudgetData();
+    };
+
+    window.addEventListener('budgetUpdated', handleBudgetUpdate);
+    
+    return () => {
+      window.removeEventListener('budgetUpdated', handleBudgetUpdate);
+    };
+  }, [token]);
+
+  // --- 2. Add Transaction ---
+  const handleAddTransaction = async (transactionData: Omit<Transaction, "id" | "date">) => {
+    try {
+      const newTx = { 
+        ...transactionData, 
+        id: Date.now().toString(), 
+        date: new Date() 
+      };
+      
+      const updatedList = [...transactions, newTx];
+
+      const res = await fetch(`${API_URL}/api/v1/budget`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ transactions: updatedList }),
+      });
+
+      if (res.ok) {
+        setTransactions(updatedList);
+        setShowForm(false);
+      }
+    } catch (err) {
+      alert("Failed to sync with server.");
+    }
   };
 
-  const handleDeleteTransaction = (id: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  const handleUpdateTransaction = (
-    id: string,
-    updates: Partial<Transaction>
-  ) => {
-    setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
-    );
+  // --- 3. Delete Transaction ---
+  const handleDeleteTransaction = async (id: string) => {
+    const updatedList = transactions.filter((t) => t.id !== id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/budget`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ transactions: updatedList }),
+      });
+      if (res.ok) setTransactions(updatedList);
+    } catch (err) {
+      console.error("Delete failed");
+    }
   };
 
   const navigateMonth = (direction: "prev" | "next") => {
     const [year, month] = selectedMonth.split("-").map(Number);
-    let newMonth = month + (direction === "next" ? 1 : -1);
-    let newYear = year;
-
-    if (newMonth > 12) {
-      newMonth = 1;
-      newYear++;
-    }
-    if (newMonth < 1) {
-      newMonth = 12;
-      newYear--;
-    }
-
-    setSelectedMonth(`${newYear}-${String(newMonth).padStart(2, "0")}`);
+    let newDate = new Date(year, month - 1 + (direction === "next" ? 1 : -1));
+    setSelectedMonth(`${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, "0")}`);
   };
-  const monthTransactions = transactions.filter(
-    (t) => getMonthKey(new Date(t.date)) === selectedMonth
-  );
 
-  const income = monthTransactions
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
+  const monthLabel = (() => {
+    const [year, month] = selectedMonth.split("-");
+    return new Date(+year, +month - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  })();
 
-  const expenses = monthTransactions.filter((t) => t.type === "expense");
-  const totalExpenses = expenses.reduce((sum, t) => sum + t.amount, 0);
-
-  let insight: string | null = null;
-
-  if (income > 0 && totalExpenses > income * 0.9) {
-    insight =
-      "Your expenses are close to your income. Consider reviewing non-essential spending.";
-  } else if (income > 0 && totalExpenses < income * 0.5) {
-    insight =
-      "Great savings rate! You may be eligible for saving-linked government schemes.";
-  } else {
-    const categoryTotals: Record<string, number> = {};
-    expenses.forEach((t) => {
-      categoryTotals[t.category] =
-        (categoryTotals[t.category] || 0) + t.amount;
-    });
-
-    const topCategory = Object.entries(categoryTotals).sort(
-      (a, b) => b[1] - a[1]
-    )[0];
-
-    if (topCategory && topCategory[1] > totalExpenses * 0.4) {
-      insight = `${topCategory[0][0].toUpperCase() +
-        topCategory[0].slice(1)} accounts for ${Math.round(
-        (topCategory[1] / totalExpenses) * 100
-      )}% of your expenses this month.`;
-    }
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Syncing your finances...</p>
+      </div>
+    );
   }
+
+  if (budgetError) {
+    return (
+      <div className="container-app py-6">
+        <div className="card-elevated p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+            <RefreshCw className="w-6 h-6 text-destructive" />
+          </div>
+          <h3 className="text-lg font-semibold">Budget Data Unavailable</h3>
+          <p className="text-muted-foreground">{budgetError}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="btn-primary"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container-app py-6 space-y-6">
       <div className="flex items-center justify-between">
-        <button
-          onClick={() => navigateMonth("prev")}
-          className="p-2 hover:bg-muted rounded-lg"
-        >
+        <button onClick={() => navigateMonth("prev")} className="p-2 hover:bg-muted rounded-lg">
           <ChevronLeft className="w-5 h-5" />
         </button>
-
         <h2 className="text-lg font-semibold">{monthLabel}</h2>
-
-        <button
-          onClick={() => navigateMonth("next")}
-          className="p-2 hover:bg-muted rounded-lg"
-        >
+        <button onClick={() => navigateMonth("next")} className="p-2 hover:bg-muted rounded-lg">
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
 
-      <BudgetOverview
-        transactions={transactions}
-        selectedMonth={selectedMonth}
-      />
+      <BudgetOverview transactions={transactions} selectedMonth={selectedMonth} />
 
-      {insight && (
-        <div className="flex gap-3 p-4 bg-secondary rounded-xl border">
-          <Lightbulb className="w-5 h-5 text-accent mt-0.5" />
-          <p className="text-sm">{insight}</p>
-        </div>
-      )}
-
-      <BudgetAnalytics
-        transactions={transactions}
-        selectedMonth={selectedMonth}
-      />
+      <BudgetAnalytics transactions={transactions} selectedMonth={selectedMonth} />
 
       {showForm ? (
-        <TransactionForm
-          onAdd={handleAddTransaction}
-          onClose={() => setShowForm(false)}
-        />
+        <TransactionForm onAdd={handleAddTransaction} onClose={() => setShowForm(false)} />
       ) : (
-        <button onClick={() => setShowForm(true)} className="btn-primary w-full">
-          <Plus className="w-4 h-4" />
-          Add Transaction
+        <button onClick={() => setShowForm(true)} className="btn-primary w-full flex items-center justify-center gap-2">
+          <Plus className="w-4 h-4" /> Add Transaction
         </button>
       )}
 
@@ -160,12 +214,8 @@ export function BudgetManager() {
         transactions={transactions}
         selectedMonth={selectedMonth}
         onDelete={handleDeleteTransaction}
-        onUpdate={handleUpdateTransaction}
+        onUpdate={() => {}}
       />
-
-      <p className="text-center text-xs text-muted-foreground pt-4">
-        All data is stored locally on your device.
-      </p>
     </div>
   );
 }

@@ -23,9 +23,9 @@ class CrudRepository {
         }
     }
 
-    async get(modelId) {    
+    async get(data) {    
         try {
-            const result = await this.model.findById(modelId);
+            const result = await this.model.findOne(data);
             return result;
         } catch (error) {
             console.log("Something went wrong in the Crud Repository Layer: get()", error);

@@ -1,5 +1,6 @@
 export type TabType = 'chat' | 'budget' | 'schemes';
 
+// src/types/index.ts (or wherever your types are)
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -12,6 +13,14 @@ export interface Message {
     nextSteps?: string[];
     confidence?: 'high' | 'medium' | 'low';
   };
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Transaction {

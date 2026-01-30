@@ -6,6 +6,7 @@ telegram_bot/venv
 .env
 telegram_bot/.env
 
+
 # Databases
 chroma.sqlite3
 semantic_history_db/
@@ -27,3 +28,6 @@ __pycache__/
 
 # IDE
 .vscode/
+
+
+node_modules/
