@@ -3,22 +3,23 @@ const { Schema } = mongoose;
 
 const TransactionSchema = new Schema({
     amount: { type: Number, required: true },
-    category: { type: String, default: null },
-    description: { type: String, default: null },
-    type: { type: String, default: 'expense' },
+    category: { type: String, default: 'other' }, // Matches your TransactionForm defaults
+    notes: { type: String, default: null },      // Changed 'description' to 'notes' to match your frontend
+    type: { type: String, enum: ['expense', 'income'], default: 'expense' },
     date: { type: Date, default: Date.now }
-}, { timestamps: true });
+}, { _id: true }); // Keep _id for individual transaction deletion
 
 const BudgetSchema = new Schema({
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-    transactions: { type: [TransactionSchema], default: [] },
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
+    userId: { 
+        type: Schema.Types.ObjectId, 
+        ref: 'User', 
+        required: true, 
+        unique: true 
+    },
+    transactions: [TransactionSchema],
+}, { 
+    timestamps: true // This automatically handles createdAt and updatedAt
 });
 
-BudgetSchema.pre('save', function (next) {
-    this.updatedAt = Date.now();
-    next();
-});
-
+// Remove the manual pre-save hook entirely to stop the "next is not a function" error
 module.exports = mongoose.model('Budget', BudgetSchema);

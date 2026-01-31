@@ -1,10 +1,10 @@
 const MessageService = require('../services/message-service');
-const messageService = new MessageService();
+const messageService = new MessageService(); // <-- Ensure this is an instance
 
 const createMessage = async (req, res) => {
     try {
         const data = req.body;
-        const message = await messageService.createMessage(data);
+        const message = await messageService.create(data);
         res.status(201).json({
             data: message,
             success: true,

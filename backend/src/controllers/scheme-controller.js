@@ -1,56 +1,49 @@
-const SchemeService = require('../services/scheme-service');
-const schemeService = new SchemeService();
+const Scheme = require('../models/Scheme');
 
-const getSchemes = async (req, res) => {
-    try {
-        const schemes = await schemeService.getAllSchemes();
-        return res.status(200).json({
-            data: schemes,
-            success: true,
-            message: 'Schemes fetched successfully',
-            err: {}
-        });
-    } catch (error) {
-        console.error('Error in getSchemes controller:', error);
-        return res.status(500).json({
-            data: {},
-            success: false,
-            message: 'Failed to fetch schemes',
-            err: error
-        });
+exports.getSchemes = async (req, res) => {
+  try {
+    const {
+      search,
+      state,
+      gender,
+      minAge,
+      maxAge
+    } = req.query;
+
+    const query = {};
+
+
+    if (search) {
+      query.$text = { $search: search };
     }
-}
 
-const getSchemeById = async (req, res) => {
-    try {
-        const schemeId = req.params.id;
-        const scheme = await schemeService.getSchemeById(schemeId);
-        if (!scheme) {
-            return res.status(404).json({
-                data: {},
-                success: false,
-                message: 'Scheme not found',
-                err: {}
-            });
-        }
-        return res.status(200).json({
-            data: scheme,
-            success: true,
-            message: 'Scheme fetched successfully',
-            err: {}
-        });
-    } catch (error) {
-        console.error('Error in getSchemeById controller:', error);
-        return res.status(500).json({
-            data: {},
-            success: false,
-            message: 'Failed to fetch scheme',
-            err: error
-        });
+    
+    if (state && state !== 'All India') {
+      query['filterMeta.state'] = state;
     }
-}
 
-module.exports = {
-    getSchemes,
-    getSchemeById
+
+    if (gender && gender !== 'All') {
+      query['filterMeta.gender'] = { $in: [gender, 'All'] };
+    }
+
+    
+    if (minAge || maxAge) {
+      query['filterMeta.age.min'] = { $lte: maxAge ?? 100 };
+      query['filterMeta.age.max'] = { $gte: minAge ?? 0 };
+    }
+
+    const schemes = await Scheme.find(query).sort({ updatedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: schemes
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
 };
+

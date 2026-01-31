@@ -1,337 +1,394 @@
 import { useState, useRef, useEffect } from 'react';
-import { Message } from '@/types';
+import { MessageCircle, Plus, Trash2, Clock, Loader2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { PromptChips } from './PromptChips';
-import { MessageCircle, Plus, Trash2, Clock } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
+
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
 interface ChatSession {
-  id: string;
+  _id: string;
   title: string;
-  messages: Message[];
-  createdAt: Date;
-  updatedAt: Date;
+  messages?: any[];
+  updatedAt: string;
 }
-
-
-const generateSessionTitle = (firstMessage: string): string => {
-  if (firstMessage.length > 50) {
-    return firstMessage.substring(0, 50) + '...';
-  }
-  return firstMessage || 'New Chat';
-};
 
 export function ChatAssistant() {
   const { token, user } = useAuth();
-  const userId = user?._id || 'guest';
-  console.log("ChatAssistant token:", token);
+  const userId = user?._id;
+  
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Track which sessions have messages loaded IN STATE (not ref)
+  const [loadedMessageSessions, setLoadedMessageSessions] = useState<Set<string>>(new Set());
 
+  // 1. Fetch Conversations on mount
   useEffect(() => {
-    const storedSessions = localStorage.getItem('chatSessions');
-    if (storedSessions) {
+    const fetchConversations = async () => {
+      if (!token) return;
+      
+      console.log('📋 Fetching conversations...');
       try {
-        const parsed = JSON.parse(storedSessions);
-        const sessionsWithDates = parsed.map((s: any) => ({
-          ...s,
-          createdAt: new Date(s.createdAt),
-          updatedAt: new Date(s.updatedAt),
-          messages: s.messages.map((m: any) => ({
-            ...m,
-            timestamp: new Date(m.timestamp)
-          }))
-        }));
-        setSessions(sessionsWithDates);
+        const res = await axios.get(`${API_URL}/api/v1/conversations`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         
-        if (sessionsWithDates.length > 0) {
-          setCurrentSessionId(sessionsWithDates[0].id);
+        if (res.data.success) {
+          console.log('✅ Conversations loaded:', res.data.data.length);
+          setSessions(res.data.data);
+          
+          // Get saved session from localStorage
+          const savedSessionId = localStorage.getItem('activeChatId');
+          
+          // Check if saved session exists in fetched conversations
+          const validSession = res.data.data.find((s: any) => s._id === savedSessionId);
+          
+          if (validSession) {
+            console.log('✅ Restoring saved session:', savedSessionId);
+            setCurrentSessionId(savedSessionId!);
+          } else if (res.data.data.length > 0) {
+            console.log('✅ Setting first session as current');
+            setCurrentSessionId(res.data.data[0]._id);
+          }
+          
+          setConversationsLoaded(true);
         }
-      } catch (error) {
-        console.error('Error loading sessions:', error);
+      } catch (err) { 
+        console.error("❌ Sidebar load failed", err); 
+        setConversationsLoaded(true);
       }
-    }
-  }, []);
+    };
+    
+    fetchConversations();
+  }, [token]);
 
+  // 2. Fetch Messages when session changes
   useEffect(() => {
-    if (sessions.length > 0) {
-      localStorage.setItem('chatSessions', JSON.stringify(sessions));
-    }
-  }, [sessions]);
+    const fetchMessages = async () => {
+      // Wait for conversations to load first
+      if (!conversationsLoaded || !currentSessionId || !token) {
+        console.log('⏭️ Skipping message fetch:', { conversationsLoaded, currentSessionId: !!currentSessionId, token: !!token });
+        return;
+      }
+      
+      // Check if already loaded
+      if (loadedMessageSessions.has(currentSessionId)) {
+        console.log('✨ Messages already loaded for:', currentSessionId);
+        return;
+      }
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+      // Verify session exists
+      const sessionExists = sessions.some(s => s._id === currentSessionId);
+      if (!sessionExists) {
+        console.log('⚠️ Session not found in list:', currentSessionId);
+        return;
+      }
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [sessions, currentSessionId]);
+      console.log('📨 Fetching messages for:', currentSessionId);
+      setIsFetching(true);
+      
+      try {
+        const res = await axios.get(`${API_URL}/api/v1/messages/${currentSessionId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        console.log('✅ Messages loaded:', res.data.data?.length || 0);
+        
+        setSessions(prev => prev.map(s => 
+          s._id === currentSessionId ? { ...s, messages: res.data.data || [] } : s
+        ));
+        
+        // Mark as loaded
+        setLoadedMessageSessions(prev => new Set([...prev, currentSessionId]));
+        
+        localStorage.setItem('activeChatId', currentSessionId);
+      } catch (err) { 
+        console.error("❌ Message load failed", err); 
+      } finally { 
+        setIsFetching(false); 
+      }
+    };
+    
+    fetchMessages();
+  }, [currentSessionId, token, conversationsLoaded, sessions.length]);
 
-  const currentSession = sessions.find(s => s.id === currentSessionId);
+  const currentSession = sessions.find(s => s._id === currentSessionId);
   const messages = currentSession?.messages || [];
 
-  const createNewSession = () => {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: 'New Chat',
-      messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    setSessions(prev => [newSession, ...prev]);
-    setCurrentSessionId(newSession.id);
-    setShowSidebar(false);
-  };
+  const handleDelete = async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!confirm('Are you sure you want to delete this conversation?')) return;
 
-  const deleteSession = (sessionId: string) => {
-    setSessions(prev => prev.filter(s => s.id !== sessionId));
-    if (currentSessionId === sessionId) {
-      const remaining = sessions.filter(s => s.id !== sessionId);
-      if (remaining.length > 0) {
-        setCurrentSessionId(remaining[0].id);
-      } else {
-        createNewSession();
+    setDeletingId(sessionId);
+    
+    try {
+      const res = await axios.delete(`${API_URL}/api/v1/conversations/${sessionId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.data.success) {
+        setSessions(prev => prev.filter(s => s._id !== sessionId));
+        
+        // Remove from loaded sessions
+        setLoadedMessageSessions(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(sessionId);
+          return newSet;
+        });
+        
+        if (currentSessionId === sessionId) {
+          const remainingSessions = sessions.filter(s => s._id !== sessionId);
+          if (remainingSessions.length > 0) {
+            setCurrentSessionId(remainingSessions[0]._id);
+          } else {
+            setCurrentSessionId('');
+            localStorage.removeItem('activeChatId');
+          }
+        }
       }
+    } catch (err) {
+      console.error("Delete failed", err);
+      alert('Failed to delete conversation. Please try again.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
   const handleSend = async (content: string) => {
-  const userMessage: Message = {
-    id: Date.now().toString(),
-    role: 'user',
-    content,
-    timestamp: new Date(),
-  };
-
-  let activeSessionId = currentSessionId;
-
-  if (!currentSessionId) {
-    const newSessionId = Date.now().toString();
-
-    setSessions(prev => [
-      {
-        id: newSessionId,
-        title: generateSessionTitle(content),
-        messages: [userMessage],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      ...prev,
-    ]);
-
-    setCurrentSessionId(newSessionId);
-    activeSessionId = newSessionId;
-  } else {
-    setSessions(prev =>
-      prev.map(session =>
-        session.id === currentSessionId
-          ? {
-              ...session,
-              messages: [...session.messages, userMessage],
-              updatedAt: new Date(),
-            }
-          : session
-      )
-    );
-  }
-
-  setIsLoading(true);
-
-  // ✅ FIXED URL (no newline)
-  const aiResponse = await axios.post(
-    'https://project-jan-3.onrender.com/query',
-    {
-      query: content,
-      user_id: userId,
-    }
-  );
-
-  // Log expense if transaction exists
-  if (aiResponse.data.transaction && token) {
-    await fetch(`${API_URL}/api/v1/airesponse`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        message: content,
-        userId,
-      }),
-    });
-  }
-
-  const aiMessage: Message = {
-    id: Date.now().toString() + '_ai',
-    role: 'assistant',
-    content: aiResponse.data.answer || '',
-    timestamp: new Date(),
-  };
-
-  setSessions(prev =>
-    prev.map(session =>
-      session.id === activeSessionId
-        ? {
-            ...session,
-            messages: [...session.messages, aiMessage],
-            updatedAt: new Date(),
-          }
-        : session
-    )
-  );
-
-  setIsLoading(false);
-};
-
-
-  const formatDate = (date: Date): string => {
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const tempUserMsg = { 
+      sender: 'User', 
+      content, 
+      _id: 'temp-' + Date.now(),
+      createdAt: new Date().toISOString()
+    };
     
-    if (days === 0) return 'Today';
-    if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days} days ago`;
-    return date.toLocaleDateString();
+    if (currentSessionId) {
+      setSessions(prev => prev.map(s => 
+        s._id === currentSessionId ? { ...s, messages: [...(s.messages || []), tempUserMsg] } : s
+      ));
+    }
+
+    setIsLoading(true);
+    try {
+      // 1. Get AI response
+      const aiRes = await axios.post('https://project-jan-3.onrender.com/query', {
+        query: content,
+        user_id: userId,
+      });
+
+      let conversationId = currentSessionId;
+
+      // 2. Create conversation if new chat
+      if (!currentSessionId) {
+        const convRes = await axios.post(`${API_URL}/api/v1/conversations`, {
+          title: content.substring(0, 50)
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (convRes.data.success) {
+          conversationId = convRes.data.data._id;
+          const newConv = { ...convRes.data.data, messages: [] };
+          setSessions(prev => [newConv, ...prev]);
+          setCurrentSessionId(conversationId);
+          
+          // Mark new session as loaded
+          setLoadedMessageSessions(prev => new Set([...prev, conversationId]));
+        } else {
+          throw new Error('Failed to create conversation');
+        }
+      }
+
+      // 3. Save user message
+      const userMsgRes = await axios.post(`${API_URL}/api/v1/messages`, {
+        conversationId: conversationId,
+        sender: 'User',
+        content: content,
+        type: aiRes.data.type || 'text'
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      // 4. Save bot message
+      const botMsgRes = await axios.post(`${API_URL}/api/v1/messages`, {
+        conversationId: conversationId,
+        sender: 'Bot',
+        content: aiRes.data.answer,
+        type: aiRes.data.type || 'text'
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      // 5. BUDGET INTEGRATION - Log expense if transaction exists
+      if (aiRes.data.transaction && token) {
+        try {
+          await axios.post(`${API_URL}/api/v1/airesponse`, {
+            message: content,
+            userId: userId,
+          }, {
+            headers: { 
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}` 
+            }
+          });
+          console.log('✅ Expense logged successfully');
+        } catch (expenseErr) {
+          console.error('❌ Failed to log expense:', expenseErr);
+        }
+      }
+
+      // 6. Update local state with actual saved messages
+      if (userMsgRes.data.success && botMsgRes.data.success) {
+        setSessions(prev => prev.map(s => 
+          s._id === conversationId ? { 
+            ...s, 
+            messages: [
+              ...(s.messages || []).filter(m => !m._id.toString().startsWith('temp-')),
+              userMsgRes.data.data,
+              botMsgRes.data.data
+            ] 
+          } : s
+        ));
+      }
+
+    } catch (err) { 
+      console.error("Chat save error", err);
+      if (currentSessionId) {
+        setSessions(prev => prev.map(s => 
+          s._id === currentSessionId ? { 
+            ...s, 
+            messages: (s.messages || []).filter(m => !m._id.toString().startsWith('temp-'))
+          } : s
+        ));
+      }
+    } finally { 
+      setIsLoading(false); 
+    }
   };
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] relative">
-      <button
-        onClick={() => setShowSidebar(!showSidebar)}
-        className="lg:hidden fixed top-20 left-4 z-40 w-10 h-10 rounded-lg bg-card border border-border shadow-lg flex items-center justify-center hover:bg-muted transition-colors"
+    <div className="flex h-[calc(100vh-5rem)] relative bg-background">
+      <button 
+        onClick={() => setShowSidebar(!showSidebar)} 
+        className="lg:hidden fixed top-20 left-4 z-40 p-2 bg-card border rounded-lg shadow-md"
       >
         <MessageCircle className="w-5 h-5" />
       </button>
-      <div className={`
-        fixed lg:relative inset-y-0 left-0 z-30
-        w-72 bg-card border-r border-border
-        transform transition-transform duration-300 ease-in-out
-        ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        flex flex-col
-      `}>
-        <div className="p-4 border-b border-border">
-          <button
-            onClick={createNewSession}
+
+      <div className={`fixed lg:relative z-30 w-72 bg-card border-r h-full transition-transform ${
+        showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      } flex flex-col`}>
+        <div className="p-4 border-b">
+          <button 
+            onClick={() => { 
+              setCurrentSessionId(''); 
+              setShowSidebar(false); 
+            }} 
             className="w-full btn-primary flex items-center justify-center gap-2"
           >
-            <Plus className="w-4 h-4" />
-            New Chat
+            <Plus className="w-4 h-4" /> New Chat
           </button>
         </div>
-
-        <div className="flex-1 overflow-y-auto scrollbar-thin p-2">
-          {sessions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              No chat sessions yet
+        
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {!conversationsLoaded ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="text-center py-8 text-xs text-muted-foreground">
+              No conversations yet
             </div>
           ) : (
-            <div className="space-y-1">
-              {sessions.map(session => (
-                <div
-                  key={session.id}
-                  className={`
-                    group relative p-3 rounded-lg cursor-pointer transition-colors
-                    ${currentSessionId === session.id 
-                      ? 'bg-primary/10 border border-primary/20' 
-                      : 'hover:bg-muted border border-transparent'
-                    }
-                  `}
-                  onClick={() => {
-                    setCurrentSessionId(session.id);
-                    setShowSidebar(false);
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {session.title}
-                      </p>
-                      <div className="flex items-center gap-1 mt-1">
-                        <Clock className="w-3 h-3 text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(session.updatedAt)}
-                        </p>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {session.messages.length} messages
-                      </p>
+            sessions.map(s => (
+              <div 
+                key={s._id} 
+                onClick={() => { 
+                  setCurrentSessionId(s._id); 
+                  setShowSidebar(false); 
+                }}
+                className={`group relative p-3 rounded-lg cursor-pointer transition-colors ${
+                  currentSessionId === s._id 
+                    ? 'bg-primary/10 border border-primary/20' 
+                    : 'hover:bg-muted'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{s.title || 'New Chat'}</p>
+                    <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
+                      <Clock className="w-3 h-3" /> 
+                      {new Date(s.updatedAt).toLocaleDateString()}
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('Delete this chat session?')) {
-                          deleteSession(session.id);
-                        }
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-opacity"
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </button>
                   </div>
+                  
+                  <button
+                    onClick={(e) => handleDelete(s._id, e)}
+                    disabled={deletingId === s._id}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-destructive/10 rounded-md text-muted-foreground hover:text-destructive disabled:opacity-50"
+                    title="Delete conversation"
+                  >
+                    {deletingId === s._id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))
           )}
-        </div>
-
-        <div className="p-4 border-t border-border">
-          <p className="text-xs text-muted-foreground text-center">
-            {sessions.length} chat session{sessions.length !== 1 ? 's' : ''}
-          </p>
         </div>
       </div>
 
-      {showSidebar && (
-        <div
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
-          onClick={() => setShowSidebar(false)}
-        />
-      )}
-
-      <div className="flex-1 flex flex-col">
-        <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-6 space-y-4">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-6 max-w-lg mx-auto">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+          {isFetching ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <p className="text-sm">Loading history...</p>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 max-w-md mx-auto">
+              <div className="p-4 bg-primary/10 rounded-full">
                 <MessageCircle className="w-8 h-8 text-primary" />
               </div>
-              <div className="space-y-2">
-                <h2 className="text-xl font-semibold">How can I help you today?</h2>
-                <p className="text-muted-foreground text-sm">
-                  Ask me about government schemes, check your eligibility, or learn how to protect yourself from financial scams.
-                </p>
-              </div>
+              <h2 className="text-xl font-bold">FINLIT Assistant</h2>
+              <p className="text-sm text-muted-foreground">
+                Ask me about financial literacy, scams, or your budget.
+              </p>
               <PromptChips onSelect={handleSend} />
             </div>
           ) : (
             <>
-              {messages.map((message) => (
-                <ChatMessage key={message.id} message={message} />
+              {messages.map((m: any, i: number) => (
+                <ChatMessage key={m._id || i} message={m} />
               ))}
               {isLoading && (
-                <div className="flex justify-start">
-                  <div className="chat-bubble-ai flex items-center gap-2">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                    <span className="text-sm text-muted-foreground">Searching guidelines...</span>
-                  </div>
+                <div className="animate-pulse text-xs text-muted-foreground">
+                  AI is thinking...
                 </div>
               )}
               <div ref={messagesEndRef} />
             </>
           )}
         </div>
-
-        <div className="px-4">
+        
+        <div className="p-4 border-t bg-background">
           <ChatInput onSend={handleSend} isLoading={isLoading} />
         </div>
       </div>

@@ -5,11 +5,14 @@ const SchemeController = require('../../controllers/scheme-controller');
 const ConversationController = require('../../controllers/conversation-controller');    
 const BudgetController = require('../../controllers/budget-controller');
 const ExpenseController = require('../../controllers/expense-controller');
+const MessageController = require('../../controllers/message-controller');  
 
 const express = require('express');
 const ExpenseRepository = require('../../repositories/expense-repo');
 const router = express.Router();
+const { getSchemes } = require('../../controllers/scheme-controller');
 
+router.get('/schemes', getSchemes)
 // signup and signin routes
 router.post('/signup', UserController.createUser);
 router.post('/signin', UserController.signInUser);
@@ -18,7 +21,7 @@ router.put('/profile', authMiddleware, UserController.updateUserProfile);
 
 // scheme routes
 router.get('/schemes', SchemeController.getSchemes);
-router.get('/schemes/:id', SchemeController.getSchemeById);
+// router.get('/schemes/:id', SchemeController.getSchemeById);
 
 // conversation routes
 router.post('/conversations', authMiddleware, ConversationController.createConversation);
@@ -27,7 +30,8 @@ router.get('/conversations/:id', authMiddleware, ConversationController.getConve
 router.delete('/conversations/:id', authMiddleware, ConversationController.deleteConversation);
 
 // message routes
-router.post('/messages', authMiddleware, ConversationController.sendMessage);
+router.post('/messages', authMiddleware, MessageController.createMessage);
+router.get('/messages/:conversationId', authMiddleware, MessageController.getMessagesByConversationId);
 
 // budget routes
 
