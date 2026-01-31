@@ -4,7 +4,7 @@
 
 FinGuard is an intelligent financial management platform designed specifically for Indian users, combining AI-powered chatbot assistance, budget tracking, government scheme recommendations, and scam detection—all in one place.
 
-![FinGuard Banner](https://img.shields.io/badge/Status-Active-success) ![Python](https://img.shields.io/badge/Python-3.10+-blue) ![React](https://img.shields.io/badge/React-18.3-61DAFB) ![FastAPI](https://img.shields.io/badge/FastAPI-0.128-009688)
+![FinGuard Banner](https://img.shields.io/badge/Status-Active-success) ![Python](https://img.shields.io/badge/Python-3.10+-blue) ![React](https://img.shields.io/badge/React-18.3-61DAFB) ![FastAPI](https://img.shields.io/badge/FastAPI-0.128-009688) ![Mobile](https://img.shields.io/badge/Mobile-React%20Native-blueviolet)
 
 ---
 
@@ -44,6 +44,23 @@ FinGuard is an intelligent financial management platform designed specifically f
 ---
 
 ## 🏗️ Tech Stack
+
+FinGuard AI also includes a **mobile application** built using **React Native**, enabling users to manage finances seamlessly on the go.
+
+### Mobile Features
+- 🔐 Authentication (Login / Signup)
+- 💬 Chat with FinGuard AI
+- 💰 Budget overview & expense tracking
+- 🏛️ Browse government schemes
+- 👤 User profile management
+- 🎨 Shared design system (colors, spacing, typography)
+
+### Mobile Tech Stack
+- **Framework**: React Native (TypeScript)
+- **Navigation**: React Navigation
+- **UI Components**: Custom reusable components
+- **Theming**: Centralized theme tokens
+- **Backend**: Shared FastAPI & Express APIs
 
 ### **Backend**
 - **Framework**: FastAPI (Python)
@@ -88,170 +105,112 @@ FinGuard-AI/
 │   │
 │   ├── db_/
 │   │   ├── __init__.py
-│   │   ├── neo4j_init.py        # Government schemes Neo4j DB
-│   │   └── neo4j_finance.py     # Finance & transactions Neo4j DB
+│   │   ├── neo4j_init.py        # Schemes database
+│   │   └── neo4j_finance.py     # Finance & budget database
 │   │
 │   ├── feature_router/
-│   │   ├── __init__.py
-│   │   └── router.py            # Routes user queries to correct agent
+│   │   └── router.py
 │   │
 │   ├── financial_explainer/
-│   │   ├── __init__.py
 │   │   ├── concept_explainer.py
-│   │   └── language_handler.py  # English / Hindi / Hinglish support
+│   │   └── language_handler.py
 │   │
 │   ├── llm/
-│   │   ├── __init__.py
 │   │   ├── answer_generator.py
 │   │   ├── grader_and_filter.py
 │   │   ├── rewriter_query.py
 │   │   └── run_agent.py
 │   │
 │   ├── model/
-│   │   └── scam_bundle.pkl      # Trained scam detection model
+│   │   └── scam_bundle.pkl
 │   │
 │   ├── retrieval/
-│   │   ├── __init__.py
-│   │   ├── kg_retrieval.py      # Knowledge graph retrieval
-│   │   ├── vector_retrieval.py  # Vector search (RAG)
+│   │   ├── kg_retrieval.py
+│   │   ├── vector_retrieval.py
 │   │   ├── pdf_loader.py
 │   │   └── run_query.py
-│   │
-│   ├── router/
-│   │   ├── __init__.py
-│   │   └── router.py
 │   │
 │   ├── scam_detector/
 │   │   ├── scam.py
 │   │   └── scam_detector.py
 │   │
 │   ├── smart_budget_manager/
-│   │   ├── __init__.py
 │   │   ├── transaction_parser.py
 │   │   ├── spending_analyser.py
 │   │   ├── alert_generator.py
 │   │   └── report_generator.py
 │   │
-│   └── src/                     # Express.js backend (service layer)
-│       ├── config/
-│       │   ├── database.js
-│       │   └── serverConfig.js
-│       │
+│   └── src/                     # Express.js service layer
 │       ├── controllers/
-│       │   ├── auth-controller.js
-│       │   ├── budget-controller.js
-│       │   ├── conversation-controller.js
-│       │   ├── expense-controller.js
-│       │   ├── message-controller.js
-│       │   ├── scam-controller.js
-│       │   ├── scheme-controller.js
-│       │   └── user-controller.js
-│       │
-│       ├── middlewares/
-│       │   └── auth-middleware.js
-│       │
 │       ├── models/
-│       │   ├── budget.js
-│       │   ├── conversation.js
-│       │   ├── expense.js
-│       │   ├── message.js
-│       │   ├── scam.js
-│       │   ├── scheme.js
-│       │   └── user.js
-│       │
 │       ├── repositories/
-│       │   ├── budget-repository.js
-│       │   ├── conversation-repo.js
-│       │   ├── crud-repo.js
-│       │   ├── expense-repo.js
-│       │   ├── message-repo.js
-│       │   ├── scam-repo.js
-│       │   ├── scheme-repo.js
-│       │   └── user-repo.js
-│       │
 │       ├── routes/
-│       │   └── v1/
-│       │       └── index.js
-│       │
 │       ├── services/
-│       │   ├── budget-service.js
-│       │   ├── conversation-service.js
-│       │   ├── expense-service.js
-│       │   ├── message-service.js
-│       │   ├── scam-service.js
-│       │   ├── scheme-service.js
-│       │   ├── user-service.js
-│       │   └── your-bot-service.js
-│       │
 │       └── index.js
 │
 ├── frontend/
 │   ├── public/
-│   │
 │   └── src/
 │       ├── auth/
-│       │   └── auth.tsx
-│       │
 │       ├── components/
 │       │   ├── budget/
-│       │   │   ├── BudgetAnalytics.tsx
-│       │   │   ├── BudgetManager.tsx
-│       │   │   ├── BudgetOverview.tsx
-│       │   │   ├── TransactionForm.tsx
-│       │   │   └── TransactionList.tsx
-│       │   │
 │       │   ├── chat/
-│       │   │   ├── ChatAssistant.tsx
-│       │   │   ├── ChatInput.tsx
-│       │   │   ├── ChatMessage.tsx
-│       │   │   └── PromptChips.tsx
-│       │   │
 │       │   ├── schemes/
-│       │   │   ├── SchemeCard.tsx
-│       │   │   ├── SchemeDetail.tsx
-│       │   │   ├── SchemeFilters.tsx
-│       │   │   └── SchemeLookup.tsx
-│       │   │
 │       │   └── ui/
-│       │       ├── button.tsx
-│       │       ├── card.tsx
-│       │       ├── input.tsx
-│       │       ├── label.tsx
-│       │       ├── separator.tsx
-│       │       ├── table.tsx
-│       │       ├── tabs.tsx
-│       │       ├── toast.tsx
-│       │       ├── toaster.tsx
-│       │       ├── tooltip.tsx
-│       │       └── use-toast.ts
-│       │
 │       ├── context/
-│       │   └── AuthContext.tsx
-│       │
 │       ├── data/
-│       │   └── schemes.ts
-│       │
 │       ├── hooks/
-│       │   └── use-toast.ts
-│       │
 │       ├── lib/
-│       │   └── utils.ts
-│       │
 │       ├── pages/
-│       │   ├── Home.tsx
-│       │   ├── Index.tsx
-│       │   ├── Profile.tsx
-│       │   └── NotFound.tsx
-│       │
 │       ├── types/
-│       │   └── index.ts
-│       │
 │       ├── App.tsx
 │       ├── main.tsx
-│       ├── index.css
-│       └── vite-env.d.ts
+│       └── index.css
+│
+├── mobile/
+│   ├── assets/
+│   │   ├── adaptive-icon.png
+│   │   ├── favicon.png
+│   │   ├── icon.png
+│   │   └── splash-icon.png
+│   │
+│   └── src/
+│       ├── components/
+│       │   └── ui/
+│       │       ├── Button.tsx
+│       │       ├── Card.tsx
+│       │       ├── Input.tsx
+│       │       └── index.ts
+│       │
+│       ├── navigation/
+│       │   ├── AppNavigator.tsx
+│       │   └── MainTabNavigator.tsx
+│       │
+│       ├── screens/
+│       │   ├── Auth/
+│       │   │   └── AuthScreen.tsx
+│       │   ├── Budget/
+│       │   │   └── BudgetScreen.tsx
+│       │   ├── Chat/
+│       │   │   └── ChatScreen.tsx
+│       │   ├── Home/
+│       │   │   └── HomeScreen.tsx
+│       │   ├── Profile/
+│       │   │   └── ProfileScreen.tsx
+│       │   └── Schemes/
+│       │       └── SchemesScreen.tsx
+│       │
+│       ├── theme/
+│       │   ├── colors.ts
+│       │   ├── spacing.ts
+│       │   ├── typography.ts
+│       │   └── index.ts
+│       │
+│       └── types/
+│           └── index.ts
 │
 └── README.md
+
 
 ```
 
@@ -346,6 +305,20 @@ VITE_BACKEND_URL=http://localhost:3000
 ```bash
 npm run dev
 ```
+
+### Mobile Setup
+
+1. ```bash
+   cd mobile
+   ```
+
+2. ```bash
+   npm install
+   ```
+
+3. ```bash
+   npx expo start
+   ```
 
 The app will be available at `http://localhost:8080`
 
@@ -445,6 +418,28 @@ Risk Profile Inference
 Personalized explanation in Hinglish
 ```
 
+### AI Transaction Logging
+```
+User → Chat  
+↓  
+NLP Transaction Parser  
+↓  
+Neo4j Finance DB  
+↓  
+Budget Alerts & Analytics
+```
+
+### Scam Detection
+```
+Message  
+↓  
+Scam Detection Model  
+↓  
+Risk Classification  
+↓  
+Explanation + Confidence Score
+```
+
 ---
 
 ## 🔧 Configuration
@@ -479,8 +474,11 @@ pytest
 cd frontend
 npm test
 ```
-
----
+### Mobile Tests
+```bash
+cd mobile
+npm test
+```
 
 ## 🚢 Deployment
 
@@ -494,7 +492,11 @@ npm test
 2. Build command: `npm run build`
 3. Publish directory: `dist`
 
----
+### Mobile App Deployment (React Native + Expo)
+
+#### Development
+1. cd mobile
+2. npx expo start
 
 ## 🤝 Contributing
 
