@@ -98,7 +98,7 @@ export function BudgetAnalytics({
     if (!active || !payload?.length) return null;
 
     return (
-      <div className="bg-card p-3 rounded-lg border shadow">
+      <div className="bg-card p-4 rounded-lg border shadow">
         <p className="text-sm font-medium">{payload[0].name}</p>
         <p className="text-lg font-bold text-primary">
           {formatCurrency(payload[0].value)}

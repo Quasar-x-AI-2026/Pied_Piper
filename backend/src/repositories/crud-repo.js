@@ -42,7 +42,15 @@ class CrudRepository {
             throw error;
         }
     }
-
+    async findOne(data) {
+        try {
+            const result = await this.model.findOne(data);
+            return result;
+        } catch (error) {
+            console.log("Something went wrong in the Crud Repository Layer: findOne()", error);
+            throw error;
+        }
+    }
     async update(modelId, data) {
         try {
             const result = await this.model.findByIdAndUpdate(modelId, data, { new: true });

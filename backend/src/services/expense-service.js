@@ -1,84 +1,97 @@
 const CrudService = require('./crud-service');
 const ExpenseRepository = require('../repositories/expense-repo');
+const Budget = require('../models/budget');
 const axios = require('axios');
 
 class ExpenseService extends CrudService {
-    constructor() {
-        const expenseRepository = new ExpenseRepository();
-        super(expenseRepository);
-    }
-    async createExpense(data) {
-        try {
-            const query = `i spent ${data.amount} on ${data.category} at ${data.date}`;
-            await axios.post('https://project-jan-3.onrender.com/query', {
-                    "query": query,
-                    "user_id": data.userId
-            });
-            const expense = await this.repository.create(data);
-            return expense;
-        } catch (error) {
-            
+  constructor() {
+    super(new ExpenseRepository());
+  }
+
+  async createExpenseAi(data) {
+    try {
+      const aiResponse = await axios.post(
+        'https://project-jan-3.onrender.com/query',
+        {
+          query: data.message,
+          user_id: data.userId,
         }
-    }
-    async createExpenseAi(data) {
-  try {
-    const aiResponse = await axios.post(
-      'https://project-jan-3.onrender.com/query',
-      {
-        query: data.message,
-        user_id: data.userId
+      );
+
+      const detail = aiResponse.data.transaction;
+
+      if (!detail || !detail.amount || !detail.date) {
+        throw new Error('Invalid AI transaction data');
       }
-    );
 
-    const detail = aiResponse.data.transaction;
-    const date = detail.date;
+      // ✅ Normalize date (YYYY-MM-DD)
+      const date = new Date(detail.date).toISOString().split('T')[0];
 
-    let expenseDoc = await this.getExpenseByDate(data.userId, date);
-
-    if (expenseDoc) {
-      expenseDoc.expense.push({
-        amount: detail.amount,
-        description: detail.description,
-        category: detail.category
-      });
-
-      await this.repository.update(expenseDoc.id, expenseDoc);
-    } else {
-      expenseDoc = await this.repository.create({
+      // =========================
+      // 1️⃣ HANDLE EXPENSE COLLECTION
+      // =========================
+      let expenseDoc = await this.repo.findOne({
         userId: data.userId,
         date,
-        expense: [{
-          amount: detail.amount,
-          description: detail.description,
-          category: detail.category
-        }]
       });
+
+      if (expenseDoc) {
+        expenseDoc.expenses.push({
+          amount: detail.amount,
+          category: detail.category || 'other',
+          description: detail.description,
+        });
+
+        await this.repo.update(expenseDoc.id, expenseDoc);
+      } else {
+        await this.repo.create({
+          userId: data.userId,
+          date,
+          expenses: [
+            {
+              amount: detail.amount,
+              category: detail.category || 'other',
+              description: detail.description,
+            },
+          ],
+        });
+      }
+
+      // =========================
+      // 2️⃣ HANDLE BUDGET TRANSACTIONS
+      // =========================
+      const transaction = {
+        amount: detail.amount,
+        category: detail.category || 'other',
+        description: detail.description,
+        type: 'expense',
+        date: new Date(detail.date),
+      };
+
+      await Budget.findOneAndUpdate(
+        { userId: data.userId },
+        {
+          $push: { transactions: transaction },
+          $set: { updatedAt: new Date() },
+        },
+        { upsert: true, new: true }
+      );
+
+      return {
+        success: true,
+        date,
+        amount: detail.amount,
+        category: detail.category || 'other',
+      };
+    } catch (error) {
+      console.error('Error in createExpenseAi:', error);
+      throw new Error(error.message);
     }
-
-    return {
-      success: true,
-      amount: detail.amount,
-      category: detail.category,
-      date
-    };
-
-  } catch (error) {
-    throw new Error(error.message);
   }
-}
 
-
-    async getExpenseByDate(userId, date) {
-        try {
-            const expenses = await this.repository.findOne({
-                userId: userId,
-                date: date
-            });
-            return expenses;
-        } catch {
-            throw new Error('Error fetching expenses by date');
-        }
-    }
+  async getExpenseByDate(userId, date) {
+    return await this.repo.findOne({ userId, date });
+  }
 }
 
 module.exports = ExpenseService;

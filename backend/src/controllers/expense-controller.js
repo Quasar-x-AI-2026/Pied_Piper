@@ -1,4 +1,4 @@
-const ExpenseSerivce = require('../services/expense-services');
+const ExpenseSerivce = require('../services/expense-service');
 const expenseService = new ExpenseSerivce();
 
 const createExpense = async (req, res) => {

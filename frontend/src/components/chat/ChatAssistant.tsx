@@ -1,281 +1,340 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import axios from "axios";
-import { MessageCircle, Plus, Trash2, AlertTriangle, Loader2 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { ChatMessage } from "./ChatMessage";
-import { ChatInput } from "./ChatInput";
-import { PromptChips } from "./PromptChips";
-import { Message } from "@/types";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
-
+import { useState, useRef, useEffect } from 'react';
+import { Message } from '@/types';
+import { ChatMessage } from './ChatMessage';
+import { ChatInput } from './ChatInput';
+import { PromptChips } from './PromptChips';
+import { MessageCircle, Plus, Trash2, Clock } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import axios from 'axios';
+const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 interface ChatSession {
   id: string;
   title: string;
   messages: Message[];
-  hasLoaded?: boolean; // New flag to prevent redundant API calls
+  createdAt: Date;
+  updatedAt: Date;
 }
 
+
+const generateSessionTitle = (firstMessage: string): string => {
+  if (firstMessage.length > 50) {
+    return firstMessage.substring(0, 50) + '...';
+  }
+  return firstMessage || 'New Chat';
+};
+
 export function ChatAssistant() {
-  const { token, user, loading: authLoading } = useAuth();
+  const { token, user } = useAuth();
+  const userId = user?._id || 'guest';
+  console.log("ChatAssistant token:", token);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [loadingChats, setLoadingChats] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  // Memoize headers to prevent effect re-runs
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  }), [token]);
-
-  /* ------------------------- Auto Scroll ------------------------- */
-  const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  useEffect(() => {
+    const storedSessions = localStorage.getItem('chatSessions');
+    if (storedSessions) {
+      try {
+        const parsed = JSON.parse(storedSessions);
+        const sessionsWithDates = parsed.map((s: any) => ({
+          ...s,
+          createdAt: new Date(s.createdAt),
+          updatedAt: new Date(s.updatedAt),
+          messages: s.messages.map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp)
+          }))
+        }));
+        setSessions(sessionsWithDates);
+        
+        if (sessionsWithDates.length > 0) {
+          setCurrentSessionId(sessionsWithDates[0].id);
+        }
+      } catch (error) {
+        console.error('Error loading sessions:', error);
+      }
+    }
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [sessions, currentSessionId, scrollToBottom]);
+    if (sessions.length > 0) {
+      localStorage.setItem('chatSessions', JSON.stringify(sessions));
+    }
+  }, [sessions]);
 
-  /* ---------------------- Initial Load --------------------------- */
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   useEffect(() => {
-    if (authLoading) return;
-    if (!token) {
-      setError("Authentication required");
-      setLoadingChats(false);
-      return;
-    }
-    loadConversations();
-  }, [authLoading, token]);
+    scrollToBottom();
+  }, [sessions, currentSessionId]);
 
-  /* ---------------------- API Actions --------------------- */
-  
-  const loadConversations = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/conversations`, { headers });
-      const chats = res.data.data.map((c: any) => ({
-        id: c._id,
-        title: c.title,
-        messages: [],
-        hasLoaded: false,
-      }));
+  const currentSession = sessions.find(s => s.id === currentSessionId);
+  const messages = currentSession?.messages || [];
 
-      setSessions(chats);
-      if (chats.length > 0) {
-        setCurrentSessionId(chats[0].id);
-        loadMessages(chats[0].id);
+  const createNewSession = () => {
+    const newSession: ChatSession = {
+      id: Date.now().toString(),
+      title: 'New Chat',
+      messages: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    setSessions(prev => [newSession, ...prev]);
+    setCurrentSessionId(newSession.id);
+    setShowSidebar(false);
+  };
+
+  const deleteSession = (sessionId: string) => {
+    setSessions(prev => prev.filter(s => s.id !== sessionId));
+    if (currentSessionId === sessionId) {
+      const remaining = sessions.filter(s => s.id !== sessionId);
+      if (remaining.length > 0) {
+        setCurrentSessionId(remaining[0].id);
+      } else {
+        createNewSession();
       }
-    } catch (err) {
-      setError("Failed to load conversations");
-    } finally {
-      setLoadingChats(false);
-    }
-  };
-
-  const loadMessages = async (conversationId: string) => {
-    const session = sessions.find(s => s.id === conversationId);
-    if (session?.hasLoaded) return; // Prevent double-fetching
-
-    try {
-      const res = await axios.get(`${API_URL}/conversations/${conversationId}`, { headers });
-      const messages = res.data.data.messages.map((m: any) => ({
-        id: m._id,
-        role: m.sender.toLowerCase(),
-        content: m.content,
-        timestamp: new Date(m.createdAt),
-      }));
-
-      setSessions(prev => prev.map(s => 
-        s.id === conversationId ? { ...s, messages, hasLoaded: true } : s
-      ));
-    } catch (err) {
-      console.error("Failed to load messages", err);
-    }
-  };
-
-  const createNewChat = async () => {
-    try {
-      const res = await axios.post(`${API_URL}/conversations`, { title: "New Chat" }, { headers });
-      const newChat: ChatSession = {
-        id: res.data.data._id,
-        title: res.data.data.title,
-        messages: [],
-        hasLoaded: true,
-      };
-      setSessions(prev => [newChat, ...prev]);
-      setCurrentSessionId(newChat.id);
-    } catch (err) {
-      alert("Could not create chat");
-    }
-  };
-
-  const deleteChat = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (!confirm("Delete this conversation?")) return;
-
-    try {
-      await axios.delete(`${API_URL}/conversations/${id}`, { headers });
-      setSessions(prev => prev.filter(s => s.id !== id));
-      if (currentSessionId === id) setCurrentSessionId("");
-    } catch (err) {
-      alert("Failed to delete chat");
     }
   };
 
   const handleSend = async (content: string) => {
-    if (!currentSessionId || !content.trim()) return;
-
-    const tempId = `tmp-${Date.now()}`;
-    const userMsg: Message = { id: tempId, role: "user", content, timestamp: new Date() };
-
-    setSessions(prev => prev.map(s => 
-      s.id === currentSessionId ? { ...s, messages: [...s.messages, userMsg] } : s
-    ));
-    setIsSending(true);
-
-    try {
-      const res = await axios.post(`${API_URL}/messages`, 
-        { conversationId: currentSessionId, content }, 
-        { headers }
-      );
-      
-      // Extract from the structure shown in your console log
-      const { botMessage, type } = res.data.data;
-
-      const botMsg: Message = {
-        id: botMessage._id,
-        role: "assistant",
-        content: botMessage.content,
-        timestamp: new Date(botMessage.createdAt),
-      };
-
-      setSessions(prev => prev.map(s => {
-        if (s.id !== currentSessionId) return s;
-        
-        // Remove the temporary message and add the real ones
-        let newMessages = [...s.messages.filter(m => m.id !== tempId), botMsg];
-        
-        // Check if this was a financial transaction based on your "type": "finance" field
-        if (type === "finance" && botMessage.structured) {
-          try {
-            const structuredData = JSON.parse(botMessage.structured);
-            const { amount, category, description } = structuredData.transaction;
-            
-            newMessages.push({
-              id: `exp-${Date.now()}`,
-              role: "assistant",
-              content: `✅ Transaction Logged: ₹${amount} for ${category || description}`,
-              timestamp: new Date(),
-            });
-          } catch (e) {
-            console.error("Failed to parse structured finance data", e);
-          }
-        }
-        
-        return { ...s, messages: newMessages };
-      }));
-    } catch (err) {
-      console.error(err);
-      alert("Message failed to send.");
-    } finally {
-      setIsSending(false);
-    }
+  const userMessage: Message = {
+    id: Date.now().toString(),
+    role: 'user',
+    content,
+    timestamp: new Date(),
   };
 
-  /* ---------------------- UI States --------------------------- */
+  let activeSessionId = currentSessionId;
 
-  if (error) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-        <AlertTriangle className="w-10 h-10 text-destructive mb-4" />
-        <p>{error}</p>
-        <button onClick={() => window.location.reload()} className="mt-4 text-primary underline">Retry</button>
-      </div>
+  if (!currentSessionId) {
+    const newSessionId = Date.now().toString();
+
+    setSessions(prev => [
+      {
+        id: newSessionId,
+        title: generateSessionTitle(content),
+        messages: [userMessage],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      ...prev,
+    ]);
+
+    setCurrentSessionId(newSessionId);
+    activeSessionId = newSessionId;
+  } else {
+    setSessions(prev =>
+      prev.map(session =>
+        session.id === currentSessionId
+          ? {
+              ...session,
+              messages: [...session.messages, userMessage],
+              updatedAt: new Date(),
+            }
+          : session
+      )
     );
   }
 
-  const currentSession = sessions.find((s) => s.id === currentSessionId);
+  setIsLoading(true);
+
+  // ✅ FIXED URL (no newline)
+  const aiResponse = await axios.post(
+    'https://project-jan-3.onrender.com/query',
+    {
+      query: content,
+      user_id: userId,
+    }
+  );
+
+  // Log expense if transaction exists
+  if (aiResponse.data.transaction && token) {
+    await fetch(`${API_URL}/api/v1/airesponse`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        message: content,
+        userId,
+      }),
+    });
+  }
+
+  const aiMessage: Message = {
+    id: Date.now().toString() + '_ai',
+    role: 'assistant',
+    content: aiResponse.data.answer || '',
+    timestamp: new Date(),
+  };
+
+  setSessions(prev =>
+    prev.map(session =>
+      session.id === activeSessionId
+        ? {
+            ...session,
+            messages: [...session.messages, aiMessage],
+            updatedAt: new Date(),
+          }
+        : session
+    )
+  );
+
+  setIsLoading(false);
+};
+
+
+  const formatDate = (date: Date): string => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days} days ago`;
+    return date.toLocaleDateString();
+  };
 
   return (
-    <div className="flex h-full bg-background overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-80 border-r bg-card/50 backdrop-blur flex flex-col">
-        <div className="p-4 border-b">
-          <button onClick={createNewChat} className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2 rounded-md hover:opacity-90 transition-all">
-            <Plus className="w-4 h-4" /> New Chat
+    <div className="flex h-[calc(100vh-5rem)] relative">
+      <button
+        onClick={() => setShowSidebar(!showSidebar)}
+        className="lg:hidden fixed top-20 left-4 z-40 w-10 h-10 rounded-lg bg-card border border-border shadow-lg flex items-center justify-center hover:bg-muted transition-colors"
+      >
+        <MessageCircle className="w-5 h-5" />
+      </button>
+      <div className={`
+        fixed lg:relative inset-y-0 left-0 z-30
+        w-72 bg-card border-r border-border
+        transform transition-transform duration-300 ease-in-out
+        ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        flex flex-col
+      `}>
+        <div className="p-4 border-b border-border">
+          <button
+            onClick={createNewSession}
+            className="w-full btn-primary flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            New Chat
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {loadingChats ? (
-            <div className="flex justify-center p-4"><Loader2 className="animate-spin text-muted-foreground" /></div>
+        <div className="flex-1 overflow-y-auto scrollbar-thin p-2">
+          {sessions.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No chat sessions yet
+            </div>
           ) : (
-            sessions.map((s) => (
-              <div
-                key={s.id}
-                onClick={() => {
-                  setCurrentSessionId(s.id);
-                  loadMessages(s.id);
-                }}
-                className={`group p-3 rounded-lg cursor-pointer flex justify-between items-center transition-colors ${
-                  currentSessionId === s.id ? "bg-primary/10 text-primary" : "hover:bg-muted"
-                }`}
-              >
-                <div className="flex items-center gap-3 truncate">
-                  <MessageCircle className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate text-sm font-medium">{s.title}</span>
+            <div className="space-y-1">
+              {sessions.map(session => (
+                <div
+                  key={session.id}
+                  className={`
+                    group relative p-3 rounded-lg cursor-pointer transition-colors
+                    ${currentSessionId === session.id 
+                      ? 'bg-primary/10 border border-primary/20' 
+                      : 'hover:bg-muted border border-transparent'
+                    }
+                  `}
+                  onClick={() => {
+                    setCurrentSessionId(session.id);
+                    setShowSidebar(false);
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {session.title}
+                      </p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <Clock className="w-3 h-3 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(session.updatedAt)}
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {session.messages.length} messages
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Delete this chat session?')) {
+                          deleteSession(session.id);
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-opacity"
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </button>
+                  </div>
                 </div>
-                <button onClick={(e) => deleteChat(e, s.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all">
-                  <Trash2 className="w-4 h-4 text-destructive" />
-                </button>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
-      </aside>
 
-      {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col relative">
-        <div className="flex-1 overflow-y-auto px-4 py-8 md:px-20">
-          {!currentSessionId ? (
-            <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
-              <div className="bg-primary/10 p-4 rounded-full"><MessageCircle className="w-8 h-8 text-primary" /></div>
-              <h2 className="text-xl font-semibold">Ready to track your expenses?</h2>
-              <p className="text-muted-foreground max-w-xs">Select a conversation or start a new one to begin chatting with your assistant.</p>
-            </div>
-          ) : currentSession?.messages.length === 0 ? (
-            <div className="space-y-6">
-              <div className="text-center mb-10">
-                <h1 className="text-2xl font-bold mb-2">Hello, {user?.name || 'there'}!</h1>
-                <p className="text-muted-foreground">How can I help you manage your budget today?</p>
+        <div className="p-4 border-t border-border">
+          <p className="text-xs text-muted-foreground text-center">
+            {sessions.length} chat session{sessions.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+      </div>
+
+      {showSidebar && (
+        <div
+          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+          onClick={() => setShowSidebar(false)}
+        />
+      )}
+
+      <div className="flex-1 flex flex-col">
+        <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-6 space-y-4">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-6 max-w-lg mx-auto">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <MessageCircle className="w-8 h-8 text-primary" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-semibold">How can I help you today?</h2>
+                <p className="text-muted-foreground text-sm">
+                  Ask me about government schemes, check your eligibility, or learn how to protect yourself from financial scams.
+                </p>
               </div>
               <PromptChips onSelect={handleSend} />
             </div>
           ) : (
-            <div className="space-y-6">
-              {currentSession?.messages.map((m) => (
-                <ChatMessage key={m.id} message={m} />
+            <>
+              {messages.map((message) => (
+                <ChatMessage key={message.id} message={message} />
               ))}
-              {isSending && (
-                <div className="flex gap-2 items-center text-muted-foreground animate-pulse text-sm">
-                  <Loader2 className="w-4 h-4 animate-spin" /> assistant is typing...
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="chat-bubble-ai flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <span className="text-sm text-muted-foreground">Searching guidelines...</span>
+                  </div>
                 </div>
               )}
-            </div>
+              <div ref={messagesEndRef} />
+            </>
           )}
-          <div ref={bottomRef} className="h-4" />
         </div>
 
-        <footer className="p-4 border-t bg-background/80 backdrop-blur">
-          <div className="max-w-4xl mx-auto">
-            <ChatInput onSend={handleSend} isLoading={isSending} />
-          </div>
-        </footer>
-      </main>
+        <div className="px-4">
+          <ChatInput onSend={handleSend} isLoading={isLoading} />
+        </div>
+      </div>
     </div>
   );
 }

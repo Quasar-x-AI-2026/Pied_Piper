@@ -4,8 +4,10 @@ const UserController = require('../../controllers/user-controller');
 const SchemeController = require('../../controllers/scheme-controller');
 const ConversationController = require('../../controllers/conversation-controller');    
 const BudgetController = require('../../controllers/budget-controller');
+const ExpenseController = require('../../controllers/expense-controller');
 
 const express = require('express');
+const ExpenseRepository = require('../../repositories/expense-repo');
 const router = express.Router();
 
 // signup and signin routes
@@ -31,5 +33,12 @@ router.post('/messages', authMiddleware, ConversationController.sendMessage);
 
 router.get('/budget', authMiddleware, BudgetController.getBudget);
 router.post('/budget', authMiddleware, BudgetController.createOrUpdateBudget);
+
+// expense routes
+// router.get('/expenses', authMiddleware, BudgetController.getExpenses);
+// router.post('/expenses', authMiddleware, BudgetController.addExpense);
+// router.delete('/expenses/:id', authMiddleware, BudgetController.deleteExpense);
+
+router.post('/airesponse', authMiddleware, ExpenseController.createExpenseAi); ;
 
 module.exports = router;
